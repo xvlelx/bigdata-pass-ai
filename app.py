@@ -45,12 +45,34 @@ def load_pdf_text():
         pass
     return ""
 
-def get_sample_questions(questions, n=5):
-    """샘플 기출문제 가져오기"""
-    samples = random.sample(questions, min(n, len(questions)))
+def get_subject_number(topic: str) -> int:
+    """과목명에서 과목 번호 추출"""
+    if "1과목" in topic:
+        return 1
+    elif "2과목" in topic:
+        return 2
+    elif "3과목" in topic:
+        return 3
+    elif "4과목" in topic:
+        return 4
+    return 0  # 전체
+
+def get_sample_questions_by_subject(questions, subject_num, n=5):
+    """해당 과목의 기출문제만 필터링하여 샘플링"""
+    if subject_num == 0:
+        filtered = questions
+    else:
+        filtered = [q for q in questions if q.get('subject') == subject_num]
+
+    if not filtered:
+        filtered = questions
+
+    samples = random.sample(filtered, min(n, len(filtered)))
     formatted = []
     for q in samples:
+        q_type = classify_question_type(q['question'])
         formatted.append(f"""
+[유형: {q_type}]
 문제: {q['question']}
 1. {q['choices'][0]}
 2. {q['choices'][1]}
@@ -61,24 +83,131 @@ def get_sample_questions(questions, n=5):
 """)
     return "\n---\n".join(formatted)
 
+def classify_question_type(question_text: str) -> str:
+    """문제 유형 분류"""
+    if any(x in question_text for x in ["아닌 것", "옳지 않은", "틀린 것", "해당하지 않는"]):
+        return "부정형"
+    elif any(x in question_text for x in ["모두 고르", "모두 선택", "해당하는 것을 모두"]):
+        return "나열형"
+    elif any(x in question_text for x in ["차이점", "비교", "구분", "다른 점"]):
+        return "비교형"
+    elif any(x in question_text for x in ["계산", "구하", "얼마", "몇 "]):
+        return "계산형"
+    else:
+        return "정의형"
+
+def analyze_question_type_distribution(questions, subject_num=0):
+    """과목별 문제 유형 분포 분석"""
+    if subject_num == 0:
+        filtered = questions
+    else:
+        filtered = [q for q in questions if q.get('subject') == subject_num]
+
+    type_count = {"정의형": 0, "부정형": 0, "비교형": 0, "나열형": 0, "계산형": 0}
+    for q in filtered:
+        q_type = classify_question_type(q['question'])
+        type_count[q_type] += 1
+
+    total = len(filtered)
+    if total == 0:
+        return type_count
+
+    return {k: f"{v}개 ({v/total*100:.0f}%)" for k, v in type_count.items()}
+
+def get_sample_questions(questions, n=5):
+    """샘플 기출문제 가져오기 (하위 호환)"""
+    return get_sample_questions_by_subject(questions, 0, n)
+
+def extract_theory_by_subject(theory_text: str, subject_num: int) -> str:
+    """과목별로 암기키트 내용 추출"""
+    subject_keywords = {
+        1: ["분석 기획", "CRISP-DM", "분석 마스터플랜", "분석 거버넌스", "데이터 거버넌스"],
+        2: ["EDA", "탐색적", "시각화", "데이터 탐색", "상관분석", "분포"],
+        3: ["회귀", "분류", "군집", "모델링", "머신러닝", "알고리즘", "앙상블"],
+        4: ["혼동행렬", "ROC", "AUC", "정밀도", "재현율", "결과해석", "F1"]
+    }
+
+    if subject_num == 0 or subject_num not in subject_keywords:
+        return theory_text[:4000]
+
+    keywords = subject_keywords[subject_num]
+    lines = theory_text.split('\n')
+    relevant_lines = []
+
+    for line in lines:
+        if any(kw in line for kw in keywords):
+            relevant_lines.append(line)
+
+    result = '\n'.join(relevant_lines)
+    if len(result) < 500:
+        return theory_text[:4000]
+
+    return result[:4000]
+
+def calculate_similarity(text1: str, text2: str) -> float:
+    """두 문장의 유사도 계산 (간단한 키워드 매칭)"""
+    words1 = set(text1.replace("?", "").replace(".", "").split())
+    words2 = set(text2.replace("?", "").replace(".", "").split())
+
+    if not words1 or not words2:
+        return 0.0
+
+    intersection = len(words1 & words2)
+    union = len(words1 | words2)
+
+    return intersection / union if union > 0 else 0.0
+
+def filter_duplicate_questions(new_questions: list, existing_questions: list, threshold=0.7) -> list:
+    """기출과 유사한 문제 제거"""
+    filtered = []
+    for new_q in new_questions:
+        is_duplicate = False
+        for exist_q in existing_questions:
+            if calculate_similarity(new_q.get('question', ''), exist_q.get('question', '')) > threshold:
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            filtered.append(new_q)
+    return filtered
+
 def generate_questions_batch(topic: str, n_questions: int,
                              exam_samples: str, theory_text: str) -> list:
     """단일 배치로 문제 생성"""
     client = OpenAI()
-    theory_excerpt = theory_text[:4000] if len(theory_text) > 4000 else theory_text
+
+    subject_num = get_subject_number(topic)
+    theory_excerpt = extract_theory_by_subject(theory_text, subject_num)
 
     prompt = f"""당신은 빅데이터분석기사 시험 출제위원입니다.
 
-## 기출문제 예시
+## 출제 규칙
+1. 기출문제와 동일하거나 유사한 문제는 절대 금지
+2. 기출 스타일(문장 구조, 보기 형식)은 유지
+3. 오답은 정답과 혼동되기 쉽게 설계
+4. 각 과목의 핵심 키워드 반드시 포함
+
+## 문제 유형별 출제 비율
+- 정의형 30% (개념, 정의를 묻는 문제)
+- 부정형 20% (옳지 않은 것, 아닌 것)
+- 비교형 20% (차이점, 구분)
+- 나열형 15% (해당하는 것 모두)
+- 계산형 15% (수치 계산)
+
+## 오답 설계 규칙
+1. 정답과 비슷한 용어 사용 (예: 무결성 vs 완전성 vs 정확성)
+2. 숫자/순서 변형 (예: 3V vs 4V vs 5V)
+3. 관련 개념이지만 틀린 답 사용
+4. 그럴듯하지만 미묘하게 틀린 설명
+
+## 기출문제 예시 (스타일 참고용)
 {exam_samples}
 
 ## 이론 내용
 {theory_excerpt}
 
 ## 요청
-- 주제: {topic}
+- 과목: {topic}
 - 문제 수: {n_questions}개
-- 새로운 문제 생성
 - 해설은 간단히 1-2문장으로
 
 ## JSON 형식으로만 출력
@@ -117,9 +246,13 @@ def generate_questions_parallel(topic: str, n_questions: int,
 
     def generate_one(args):
         subj, n = args
-        samples = get_sample_questions(exam_questions, 5)
+        subject_num = get_subject_number(subj)
+        samples = get_sample_questions_by_subject(exam_questions, subject_num, 5)
         response = generate_questions_batch(subj, n, samples, theory_text)
-        return parse_generated_questions(response)
+        parsed = parse_generated_questions(response)
+        # 기출과 중복되는 문제 제거
+        filtered = filter_duplicate_questions(parsed, exam_questions)
+        return filtered
 
     # 병렬 실행
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
