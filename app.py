@@ -286,6 +286,22 @@ def parse_generated_questions(response: str):
                 json_str = json_str[:last_complete + 1] + "]"
 
         questions = json.loads(json_str)
+
+        # answer 값 검증 및 수정
+        for q in questions:
+            answer = q.get('answer', 1)
+            # answer가 0이면 1로, 5 이상이면 4로 수정
+            if answer < 1:
+                q['answer'] = 1
+            elif answer > 4:
+                q['answer'] = 4
+            # answer가 문자열이면 정수로 변환
+            if isinstance(q.get('answer'), str):
+                try:
+                    q['answer'] = int(q['answer'])
+                except:
+                    q['answer'] = 1
+
         return questions
     except Exception as e:
         print(f"JSON 파싱 오류: {e}")
