@@ -302,6 +302,19 @@ def parse_generated_questions(response: str):
                 except:
                     q['answer'] = 1
 
+            # 보기에서 A., B., C., D. 또는 1., 2., 3., 4. 접두사 제거
+            if 'choices' in q:
+                cleaned_choices = []
+                for choice in q['choices']:
+                    # A. B. C. D. 또는 1. 2. 3. 4. 제거
+                    choice = str(choice).strip()
+                    if len(choice) > 2 and choice[0] in 'ABCD1234' and choice[1] in '.)':
+                        choice = choice[2:].strip()
+                    elif len(choice) > 3 and choice[:2] in ['A.', 'B.', 'C.', 'D.', '1.', '2.', '3.', '4.']:
+                        choice = choice[2:].strip()
+                    cleaned_choices.append(choice)
+                q['choices'] = cleaned_choices
+
         return questions
     except Exception as e:
         print(f"JSON 파싱 오류: {e}")
