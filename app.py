@@ -13,7 +13,10 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 JSON_DIR = DATA_DIR / "json"
-PDF_PATH = DATA_DIR / "빅데이터암기키트.pdf"
+PDF_PATHS = [
+    DATA_DIR / "빅데이터암기키트.pdf",
+    DATA_DIR / "빅분기_필기_요약정리.pdf"
+]
 
 # 데이터 로드
 @st.cache_data
@@ -32,15 +35,17 @@ def load_exam_questions():
 
 @st.cache_data
 def load_pdf_text():
-    """PDF 텍스트 로드"""
+    """여러 PDF 텍스트 로드 및 병합"""
     try:
         from pypdf import PdfReader
-        if PDF_PATH.exists():
-            reader = PdfReader(str(PDF_PATH))
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
-            return text
+        all_text = ""
+        for pdf_path in PDF_PATHS:
+            if pdf_path.exists():
+                reader = PdfReader(str(pdf_path))
+                for page in reader.pages:
+                    all_text += page.extract_text() + "\n"
+                all_text += "\n---\n"  # PDF 구분자
+        return all_text
     except:
         pass
     return ""
