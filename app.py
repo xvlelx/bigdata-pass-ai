@@ -374,6 +374,28 @@ def render_past_exam_mode(exam_questions):
 
         return
 
+    # 문제 네비게이션 (드롭다운)
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        options = []
+        for i in range(total_q):
+            is_answered = str(i) in st.session_state.user_answers
+            label = f"문제 {i+1}" + (" [v]" if is_answered else "")
+            options.append(label)
+
+        selected = st.selectbox(
+            "문제 선택",
+            options,
+            index=st.session_state.current_q_index,
+            key="past_nav_select"
+        )
+        new_idx = options.index(selected)
+        if new_idx != st.session_state.current_q_index:
+            st.session_state.current_q_index = new_idx
+            st.rerun()
+
+    st.divider()
+
     # 현재 문제 표시
     q_idx = st.session_state.current_q_index
     q = questions[q_idx]
@@ -611,21 +633,28 @@ def main():
         st.progress(answered / total_q, text=f"진행률: {answered}/{total_q}")
 
         # 문제 네비게이션
-        cols = st.columns(min(10, total_q))
-        for i in range(min(10, total_q)):
-            with cols[i]:
-                is_current = (i == st.session_state.current_q_index)
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            # 문제 번호 옵션 생성 (풀었으면 [v] 표시)
+            options = []
+            for i in range(total_q):
                 is_answered = str(i) in st.session_state.user_answers
+                label = f"문제 {i+1}" + (" [v]" if is_answered else "")
+                options.append(label)
 
-                label = f"{i+1}"
-                if is_answered:
-                    label += " [v]"
+            selected = st.selectbox(
+                "문제 선택",
+                options,
+                index=st.session_state.current_q_index,
+                key="ai_nav_select"
+            )
+            new_idx = options.index(selected)
+            if new_idx != st.session_state.current_q_index:
+                st.session_state.current_q_index = new_idx
+                st.rerun()
 
-                if st.button(label, key=f"nav_{i}",
-                           type="primary" if is_current else "secondary",
-                           use_container_width=True):
-                    st.session_state.current_q_index = i
-                    st.rerun()
+        with col2:
+            st.write(f"풀이 현황: {answered}/{total_q}")
 
         st.divider()
 
