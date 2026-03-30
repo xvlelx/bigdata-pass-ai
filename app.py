@@ -440,19 +440,19 @@ def render_past_exam_mode(exam_questions):
 
     with col1:
         if q_idx > 0:
-            if st.button("이전 문제", use_container_width=True):
+            if st.button("이전 문제", key="past_prev", use_container_width=True):
                 st.session_state.current_q_index -= 1
                 st.rerun()
 
     with col2:
         if answered == total_q:
-            if st.button("최종 결과 보기", type="primary", use_container_width=True):
+            if st.button("최종 결과 보기", key="past_final", type="primary", use_container_width=True):
                 st.session_state.show_results = True
                 st.rerun()
 
     with col3:
         if q_idx < total_q - 1:
-            if st.button("다음 문제", use_container_width=True):
+            if st.button("다음 문제", key="past_next", use_container_width=True):
                 st.session_state.current_q_index += 1
                 st.rerun()
 
@@ -712,19 +712,19 @@ def main():
 
             with col1:
                 if q_idx > 0:
-                    if st.button("이전", use_container_width=True):
+                    if st.button("이전", key="ai_prev", use_container_width=True):
                         st.session_state.current_q_index -= 1
                         st.rerun()
 
             with col2:
                 if answered == total_q:
-                    if st.button("최종 결과 보기", type="primary", use_container_width=True):
+                    if st.button("최종 결과 보기", key="ai_final", type="primary", use_container_width=True):
                         st.session_state.show_results = True
                         st.rerun()
 
             with col3:
                 if q_idx < total_q - 1:
-                    if st.button("다음", use_container_width=True):
+                    if st.button("다음", key="ai_next", use_container_width=True):
                         st.session_state.current_q_index += 1
                         st.rerun()
 
