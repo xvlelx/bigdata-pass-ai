@@ -271,6 +271,169 @@ def generate_questions_parallel(topic: str, n_questions: int,
 
     return all_questions
 
+def render_past_exam_mode(exam_questions):
+    """기출문제 풀기 모드 렌더링"""
+
+    # 문제 선택 전
+    if not st.session_state.past_exam_questions:
+        st.subheader("기출문제 풀기")
+
+        # 필터 옵션
+        col1, col2 = st.columns(2)
+
+        with col1:
+            subject_filter = st.selectbox(
+                "과목 선택",
+                ["전체", "1과목: 빅데이터 분석 기획", "2과목: 빅데이터 탐색",
+                 "3과목: 빅데이터 모델링", "4과목: 빅데이터 결과해석"]
+            )
+
+        with col2:
+            mode = st.selectbox(
+                "풀이 방식",
+                ["순서대로", "랜덤 섞기"]
+            )
+
+        # 과목 필터링
+        subject_num = get_subject_number(subject_filter)
+        if subject_num == 0:
+            filtered_questions = exam_questions
+        else:
+            filtered_questions = [q for q in exam_questions if q.get('subject') == subject_num]
+
+        st.write(f"선택된 문제: {len(filtered_questions)}개")
+
+        # 문제 수 선택
+        n_questions = st.slider("풀 문제 수", min_value=5, max_value=min(80, len(filtered_questions)),
+                                value=min(20, len(filtered_questions)), step=5)
+
+        if st.button("문제 풀기 시작", type="primary"):
+            selected = filtered_questions[:n_questions] if mode == "순서대로" else random.sample(filtered_questions, n_questions)
+            st.session_state.past_exam_questions = selected
+            st.session_state.current_q_index = 0
+            st.session_state.user_answers = {}
+            st.session_state.show_results = False
+            st.rerun()
+
+        return
+
+    # 문제 풀이 중
+    questions = st.session_state.past_exam_questions
+    total_q = len(questions)
+    answered = len(st.session_state.user_answers)
+
+    # 진행률 표시
+    correct_so_far = sum(1 for i, q in enumerate(questions)
+                         if str(i) in st.session_state.user_answers
+                         and st.session_state.user_answers[str(i)] == q['answer'])
+    wrong_so_far = answered - correct_so_far
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("진행률", f"{answered}/{total_q}")
+    with col2:
+        st.metric("맞은 문제", f"{correct_so_far}개")
+    with col3:
+        accuracy = (correct_so_far / answered * 100) if answered > 0 else 0
+        st.metric("정답률", f"{accuracy:.0f}%")
+
+    st.divider()
+
+    # 결과 화면
+    if st.session_state.show_results:
+        st.subheader("최종 결과")
+
+        score = correct_so_far / total_q * 100
+        delta = "합격" if score >= 60 else "불합격"
+        st.metric("최종 점수", f"{score:.0f}점", delta)
+
+        st.divider()
+
+        # 오답 노트
+        st.subheader("오답 노트")
+        for i, q in enumerate(questions):
+            user_ans = st.session_state.user_answers.get(str(i))
+            if user_ans != q['answer']:
+                with st.expander(f"[X] 문제 {i+1}: {q['question'][:50]}..."):
+                    st.markdown(f"**{q['question']}**")
+                    for j, choice in enumerate(q['choices'], 1):
+                        if j == q['answer']:
+                            st.success(f"{j}. {choice} (정답)")
+                        elif j == user_ans:
+                            st.error(f"{j}. {choice} (선택)")
+                        else:
+                            st.write(f"{j}. {choice}")
+                    if q.get('keywords'):
+                        st.caption(f"키워드: {', '.join(q['keywords'])}")
+
+        if st.button("다시 풀기", type="primary"):
+            st.session_state.past_exam_questions = []
+            st.session_state.user_answers = {}
+            st.session_state.show_results = False
+            st.rerun()
+
+        return
+
+    # 현재 문제 표시
+    q_idx = st.session_state.current_q_index
+    q = questions[q_idx]
+
+    st.subheader(f"문제 {q_idx + 1} / {total_q}")
+    st.markdown(f"**{q['question']}**")
+
+    current_answer = st.session_state.user_answers.get(str(q_idx))
+    answered_this = current_answer is not None
+
+    # 보기 표시
+    for i, choice in enumerate(q['choices'], 1):
+        is_selected = (current_answer == i)
+        is_correct_choice = (i == q['answer'])
+
+        if answered_this:
+            if is_correct_choice:
+                st.success(f"{i}. {choice} [정답]")
+            elif is_selected and not is_correct_choice:
+                st.error(f"{i}. {choice} [오답]")
+            else:
+                st.write(f"{i}. {choice}")
+        else:
+            if st.button(f"{i}. {choice}", key=f"past_choice_{q_idx}_{i}", use_container_width=True):
+                st.session_state.user_answers[str(q_idx)] = i
+                st.rerun()
+
+    # 정답 선택 후 피드백
+    if answered_this:
+        is_correct = current_answer == q['answer']
+        if is_correct:
+            st.success("정답입니다!")
+        else:
+            st.error(f"오답입니다. 정답은 {q['answer']}번입니다.")
+
+        if q.get('keywords'):
+            st.caption(f"키워드: {', '.join(q['keywords'])}")
+
+    # 네비게이션
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        if q_idx > 0:
+            if st.button("이전 문제", use_container_width=True):
+                st.session_state.current_q_index -= 1
+                st.rerun()
+
+    with col2:
+        if answered == total_q:
+            if st.button("최종 결과 보기", type="primary", use_container_width=True):
+                st.session_state.show_results = True
+                st.rerun()
+
+    with col3:
+        if q_idx < total_q - 1:
+            if st.button("다음 문제", use_container_width=True):
+                st.session_state.current_q_index += 1
+                st.rerun()
+
+
 def parse_generated_questions(response: str):
     """응답에서 JSON 파싱"""
     try:
@@ -331,9 +494,11 @@ def main():
         layout="wide"
     )
 
-    st.title("BigData")
+    st.title("BigData-Pass AI")
 
     # Session State 초기화
+    if "mode" not in st.session_state:
+        st.session_state.mode = None  # None, "ai_generate", "past_exam"
     if "generated_questions" not in st.session_state:
         st.session_state.generated_questions = []
     if "current_q_index" not in st.session_state:
@@ -342,14 +507,57 @@ def main():
         st.session_state.user_answers = {}
     if "show_results" not in st.session_state:
         st.session_state.show_results = False
+    if "past_exam_questions" not in st.session_state:
+        st.session_state.past_exam_questions = []
 
     # 데이터 로드
     exam_questions = load_exam_questions()
     theory_text = load_pdf_text()
 
-    # 문제 생성 영역
+    # 모드 선택 화면
+    if st.session_state.mode is None:
+        st.subheader("학습 모드 선택")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### AI 문제 생성")
+            st.write("AI가 기출문제 스타일로 새로운 문제를 생성합니다.")
+            st.write(f"학습 데이터: 기출 {len(exam_questions)}문제")
+            if st.button("AI 문제 생성 모드", type="primary", use_container_width=True):
+                st.session_state.mode = "ai_generate"
+                st.rerun()
+
+        with col2:
+            st.markdown("### 기출문제 풀기")
+            st.write("실제 기출문제를 한 문제씩 풀어봅니다.")
+            st.write(f"총 {len(exam_questions)}문제 보유")
+            if st.button("기출문제 풀기 모드", type="secondary", use_container_width=True):
+                st.session_state.mode = "past_exam"
+                st.rerun()
+
+        return
+
+    # 뒤로가기 버튼
+    if st.button("< 모드 선택으로 돌아가기"):
+        st.session_state.mode = None
+        st.session_state.generated_questions = []
+        st.session_state.past_exam_questions = []
+        st.session_state.user_answers = {}
+        st.session_state.show_results = False
+        st.session_state.current_q_index = 0
+        st.rerun()
+
+    st.divider()
+
+    # 기출문제 풀기 모드
+    if st.session_state.mode == "past_exam":
+        render_past_exam_mode(exam_questions)
+        return
+
+    # AI 문제 생성 모드
     if not st.session_state.generated_questions:
-        st.subheader("문제 생성 설정")
+        st.subheader("AI 문제 생성 설정")
 
         topic = st.selectbox(
             "출제 과목",
