@@ -436,25 +436,28 @@ def render_past_exam_mode(exam_questions):
             st.caption(f"키워드: {', '.join(q['keywords'])}")
 
     # 네비게이션
+    def go_prev():
+        st.session_state.current_q_index -= 1
+
+    def go_next():
+        st.session_state.current_q_index += 1
+
+    def show_final():
+        st.session_state.show_results = True
+
     col1, col2, col3 = st.columns([1, 1, 1])
 
     with col1:
         if q_idx > 0:
-            if st.button("이전 문제", key="past_prev", use_container_width=True):
-                st.session_state.current_q_index -= 1
-                st.rerun()
+            st.button("이전 문제", key="past_prev", on_click=go_prev, use_container_width=True)
 
     with col2:
         if answered == total_q:
-            if st.button("최종 결과 보기", key="past_final", type="primary", use_container_width=True):
-                st.session_state.show_results = True
-                st.rerun()
+            st.button("최종 결과 보기", key="past_final", type="primary", on_click=show_final, use_container_width=True)
 
     with col3:
         if q_idx < total_q - 1:
-            if st.button("다음 문제", key="past_next", use_container_width=True):
-                st.session_state.current_q_index += 1
-                st.rerun()
+            st.button("다음 문제", key="past_next", on_click=go_next, use_container_width=True)
 
 
 def parse_generated_questions(response: str):
@@ -708,25 +711,28 @@ def main():
                     st.caption(f"키워드: {', '.join(q['keywords'])}")
 
             # 네비게이션
+            def ai_go_prev():
+                st.session_state.current_q_index -= 1
+
+            def ai_go_next():
+                st.session_state.current_q_index += 1
+
+            def ai_show_final():
+                st.session_state.show_results = True
+
             col1, col2, col3 = st.columns([1, 1, 1])
 
             with col1:
                 if q_idx > 0:
-                    if st.button("이전", key="ai_prev", use_container_width=True):
-                        st.session_state.current_q_index -= 1
-                        st.rerun()
+                    st.button("이전", key="ai_prev", on_click=ai_go_prev, use_container_width=True)
 
             with col2:
                 if answered == total_q:
-                    if st.button("최종 결과 보기", key="ai_final", type="primary", use_container_width=True):
-                        st.session_state.show_results = True
-                        st.rerun()
+                    st.button("최종 결과 보기", key="ai_final", type="primary", on_click=ai_show_final, use_container_width=True)
 
             with col3:
                 if q_idx < total_q - 1:
-                    if st.button("다음", key="ai_next", use_container_width=True):
-                        st.session_state.current_q_index += 1
-                        st.rerun()
+                    st.button("다음", key="ai_next", on_click=ai_go_next, use_container_width=True)
 
         else:
             # 채점 결과
